@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIVARIUM // cellular automaton lab</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e0a; --panel:#101610; --grid-line:#1a241a;
+    --ink:#9fe89f; --ink-dim:#4a7a4a; --amber:#ffb000;
+    --accent:#00e5ff; --danger:#ff5555; --border:#2a3a2a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink); font-family:'Space Mono',monospace; overflow:hidden;
+    background-image:
+      radial-gradient(circle at 50% 0%,rgba(60,120,60,.08),transparent 60%),
+      repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.25) 3px,rgba(0,0,0,.25) 3px);
+  }
+  .wrap{display:flex;height:100vh}
+  .stage{flex:1;display:flex;flex-direction:column;min-width:0}
+  .titlebar{display:flex;align-items:baseline;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#0d130d,#0a0e0a)}
+  .titlebar h1{font-family:'VT323',monospace;font-size:32px;letter-spacing:2px;color:var(--ink);text-shadow:0 0 8px rgba(159,232,159,.4)}
+  .titlebar .sub{font-size:11px;color:var(--ink-dim);letter-spacing:1px}
+  .blink{animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .canvas-area{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:18px;overflow:hidden}
+  canvas{image-rendering:pixelated;border:1px solid var(--border);box-shadow:0 0 0 1px #000,0 0 40px rgba(40,90,40,.25),inset 0 0 60px rgba(0,0,0,.6);background:#060906;cursor:crosshair;max-width:100%;max-height:100%}
+  .readout{display:flex;gap:18px;padding:10px 20px;border-top:1px solid var(--border);font-size:12px;color:var(--ink-dim);letter-spacing:1px;background:#0d130d;flex-wrap:wrap;align-items:center}
+  .readout b{color:var(--amber)}
+  .readout .legend{display:flex;gap:12px;margin-left:auto;flex-wrap:wrap}
+  .readout .lg{display:flex;align-items:center;gap:5px;color:var(--ink)}
+  .readout .lg i{width:11px;height:11px;display:inline-block;border:1px solid #000}
+  .panel{width:340px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--border);overflow-y:auto;padding:18px 18px 60px}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:var(--border)}
+  .group{margin-bottom:22px;border:1px solid var(--border);padding:14px;position:relative;background:#0c110c}
+  .group>legend{font-family:'VT323',monospace;font-size:18px;letter-spacing:1px;color:var(--amber);padding:0 6px}
+  label{display:block;font-size:11px;letter-spacing:.5px;color:var(--ink-dim);margin:12px 0 5px;text-transform:uppercase}
+  label:first-of-type{margin-top:4px}
+  .val{color:var(--ink);float:right}
+  input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--grid-line);outline:none;border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--ink);cursor:pointer;box-shadow:0 0 6px var(--ink)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--ink);border:none;cursor:pointer}
+  select,button{font-family:'Space Mono',monospace}
+  select{width:100%;background:#0a0e0a;color:var(--ink);border:1px solid var(--border);padding:7px;font-size:12px;cursor:pointer}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+  button{flex:1;background:#0a0e0a;color:var(--ink);border:1px solid var(--border);padding:9px 6px;font-size:12px;letter-spacing:1px;cursor:pointer;transition:.12s;text-transform:uppercase}
+  button:hover{background:var(--ink);color:#000;box-shadow:0 0 12px rgba(159,232,159,.5)}
+  button.run{background:var(--ink);color:#000;font-weight:700}
+  button.run.paused{background:#0a0e0a;color:var(--ink)}
+  button.danger:hover{background:var(--danger);box-shadow:0 0 12px rgba(255,85,85,.5)}
+  .checkrow{display:flex;align-items:center;gap:8px;margin:9px 0;font-size:12px;color:var(--ink);text-transform:none}
+  .checkrow input{accent-color:var(--ink)}
+  .checkrow label{margin:0;text-transform:none;color:var(--ink);font-size:12px}
+  .hint{font-size:10px;color:var(--ink-dim);margin-top:8px;line-height:1.5}
+  .num-line{display:grid;grid-template-columns:repeat(9,1fr);gap:3px;margin-top:6px}
+  .dcell{aspect-ratio:1;background:#0a0e0a;border:1px solid var(--border);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--ink-dim)}
+  .dcell.on{background:var(--ink);color:#000;border-color:var(--ink)}
+  .dist-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:6px}
+  .dist-grid .dcell.on{background:var(--accent);border-color:var(--accent);color:#000}
+  .dist-grid .dcell.center{background:var(--border);color:var(--ink);cursor:default}
+  /* species editor */
+  .sp-card{border:1px solid var(--border);margin-bottom:10px;background:#0a0e0a}
+  .sp-head{display:flex;align-items:center;gap:9px;padding:9px 10px;cursor:pointer;user-select:none}
+  .sp-head .swatch{width:16px;height:16px;border:1px solid #000;flex-shrink:0}
+  .sp-head .nm{flex:1;font-size:13px;color:var(--ink)}
+  .sp-head .chev{color:var(--ink-dim);font-size:11px;transition:.15s}
+  .sp-head.open .chev{transform:rotate(90deg)}
+  .sp-body{display:none;padding:0 11px 12px;border-top:1px solid var(--border)}
+  .sp-body.open{display:block}
+  .palette{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .pal{width:30px;height:30px;border:2px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .pal.sel{border-color:#fff;box-shadow:0 0 8px #fff}
+  .pal.erase{background:#060906;color:var(--ink-dim);font-size:16px}
+  .tag{display:inline-block;font-size:10px;padding:1px 6px;border:1px solid var(--border);color:var(--ink-dim);border-radius:2px;margin-left:6px}
+  .tag.pred{color:var(--danger);border-color:var(--danger)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <div class="titlebar">
+      <h1>VIVARIUM<span class="blink">_</span></h1>
+      <span class="sub">cellular automaton lab · ecosystem edition</span>
+    </div>
+    <div class="canvas-area"><canvas id="cv"></canvas></div>
+    <div class="readout">
+      <span>GEN <b id="r-gen">0</b></span>
+      <span>POP <b id="r-pop">0</b></span>
+      <span>FPS <b id="r-fps">0</b></span>
+      <span>GRID <b id="r-dim">0×0</b></span>
+      <span id="r-status">PAUSED</span>
+      <span class="legend" id="legend"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <fieldset class="group">
+      <legend>ECOSYSTEM PRESET</legend>
+      <select id="preset"></select>
+      <div class="hint" id="preset-hint"></div>
+      <div class="btn-row" style="margin-top:10px">
+        <button id="apply-preset" class="run" style="flex:2">LOAD &amp; SEED</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button id="export-cfg">⤓ EXPORT</button>
+        <button id="import-cfg">⤒ IMPORT</button>
+      </div>
+      <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+      <div class="hint">Export the current species &amp; settings as text (copy it) or download a JSON file. Import by pasting text or choosing a file.</div>
+      <div id="export-box" style="display:none;margin-top:8px">
+        <textarea id="export-text" readonly style="width:100%;height:110px;background:#0a0e0a;color:var(--ink);border:1px solid var(--border);font-family:'Space Mono',monospace;font-size:11px;padding:8px;resize:vertical"></textarea>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="export-copy" class="run">⧉ COPY</button>
+          <button id="export-download">⤓ DOWNLOAD FILE</button>
+          <button id="export-close">CLOSE</button>
+        </div>
+        <div class="hint" id="export-msg"></div>
+      </div>
+      <div id="import-box" style="display:none;margin-top:8px">
+        <textarea id="import-text" placeholder="Paste configuration JSON here…" style="width:100%;height:90px;background:#0a0e0a;color:var(--ink);border:1px solid var(--border);font-family:'Space Mono',monospace;font-size:11px;padding:8px;resize:vertical"></textarea>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="import-apply" class="run">APPLY JSON</button>
+          <button id="import-choose">⤒ FILE…</button>
+          <button id="import-cancel">CANCEL</button>
+        </div>
+        <div class="hint" id="import-err" style="color:var(--danger)"></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>SIMULATION</legend>
+      <div class="btn-row">
+        <button id="run" class="run paused">▶ RUN</button>
+        <button id="step">STEP ›</button>
+      </div>
+      <label>Speed <span class="val" id="v-speed">10 gen/s</span></label>
+      <input type="range" id="speed" min="1" max="60" value="10">
+      <div class="btn-row" style="margin-top:12px">
+        <button id="clear" class="danger">CLEAR</button>
+        <button id="randomize">SEED</button>
+      </div>
+      <label>Seed density <span class="val" id="v-density">28%</span></label>
+      <input type="range" id="density" min="1" max="90" value="28">
+      <label>Seed cluster size <span class="val" id="v-cluster">4</span></label>
+      <input type="range" id="cluster" min="1" max="12" value="4">
+      <div class="hint">Seeding scatters ragged clusters of one species at a time, not single scattered cells — giving colonies room to establish.</div>
+      <div class="checkrow"><input type="checkbox" id="rain"><label for="rain">Cell rain — master switch</label></div>
+      <div class="hint">When on, each species rains in at its own rate &amp; cluster size — set those per species below. Rate 0 means that species never rains.</div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>GRID</legend>
+      <label>Cell size <span class="val" id="v-cell">9 px</span></label>
+      <input type="range" id="cellsize" min="3" max="24" value="9">
+      <div class="checkrow"><input type="checkbox" id="wrap" checked><label for="wrap">Toroidal edges (wrap around)</label></div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>SPECIES — PER-TYPE RULES</legend>
+      <div id="species-list"></div>
+      <div class="hint">Each species has its own neighbourhood, birth/survival counts, and predation. Click a row to edit. Predators marked <span class="tag pred">PRED</span> die without enough prey nearby.</div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>PAINT</legend>
+      <label>Active brush</label>
+      <div class="palette" id="palette"></div>
+      <div class="hint">Click / drag on the field to paint. Right-click erases.</div>
+    </fieldset>
+  </div>
+</div>
+
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+
+/* ---------- ECOSYSTEM PRESETS ----------
+   Each species:
+     name, color
+     mode: neighbourhood ('moore','horizontal','vertical','diagonal','cross','distance')
+     ring: array of [dx,dy] used when mode==='distance'
+     survive: Set of neighbour-counts (same species) to stay alive
+     birth:   Set of neighbour-counts (same species among neighbours) to be born
+     eats:    index of prey species, or null
+     needsPrey: if true, this cell DIES unless >=preyMin prey neighbours present
+     preyMin: min prey neighbours required to survive (when needsPrey)
+*/
+// lifespan: max age in generations a cell can reach before dying of old age (0 = immortal)
+const PRESETS = {
+  "grass-cows-wolves": {
+    hint:"A grazing food chain tuned to persist. Grass regrows readily, cows graze where grass is thick and are born onto grass, wolves are sparse hunters born onto cows. Light rain on each tier prevents total collapse, so populations oscillate.",
+    species:[
+      {name:"Grass", color:"#4ade80", mode:"moore", survive:[1,2,3,4,5], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:8},
+      {name:"Cow",   color:"#e8d8a0", mode:"moore", survive:[1,2,3,4,5], birth:[2,3], eats:0, needsPrey:true, preyMin:1, lifespan:40, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:20},
+      {name:"Wolf",  color:"#9aa0a6", mode:"moore", survive:[1,2,3,4], birth:[2,3], eats:1, needsPrey:true, preyMin:1, lifespan:35, bornOnPrey:true, rainRate:1, rainClus:1, rainProb:35},
+    ]
+  },
+  "coral-fish-shark": {
+    hint:"A reef that holds. Coral is slow but immortal and seeds in often, fish school and are born onto coral, sharks are sparse hunters born onto fish. Rain on every tier keeps the reef from emptying out.",
+    species:[
+      {name:"Coral", color:"#ff7eb6", mode:"moore", survive:[2,3,4,5,6], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:8},
+      {name:"Fish",  color:"#38bdf8", mode:"moore", survive:[1,2,3,4], birth:[2,3], eats:0, needsPrey:true, preyMin:1, lifespan:35, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:18},
+      {name:"Shark", color:"#cbd5e1", mode:"moore", survive:[1,2,3,4], birth:[2,3], eats:1, needsPrey:true, preyMin:1, lifespan:50, bornOnPrey:true, rainRate:1, rainClus:1, rainProb:40},
+    ]
+  },
+  "fungus-termite": {
+    hint:"A slow rot cycle. Fungus creeps along diagonals; termites graze it on a cross neighbourhood, are born onto fungus, and keep it from saturating the board.",
+    species:[
+      {name:"Fungus",  color:"#a3e635", mode:"diagonal", survive:[1,2,3], birth:[2], eats:null, needsPrey:false, lifespan:0, rainRate:1, rainClus:2, rainProb:14},
+      {name:"Termite", color:"#d97706", mode:"cross", survive:[1,2,3,4], birth:[2,3], eats:0, needsPrey:true, preyMin:1, lifespan:40, bornOnPrey:true, rainRate:1, rainClus:1, rainProb:25},
+    ]
+  },
+  "plankton-krill-whale": {
+    hint:"Three trophic levels at different scales. Plankton blooms and seeds in, krill swarm and are born onto plankton, whales are rare long-lived hunters born onto krill that sweep a wide ring. Light rain keeps each level alive.",
+    species:[
+      {name:"Plankton",color:"#5eead4", mode:"moore", survive:[1,2,3,4,5], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:7},
+      {name:"Krill",   color:"#fb923c", mode:"moore", survive:[1,2,3,4], birth:[2,3], eats:0, needsPrey:true, preyMin:1, lifespan:30, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:18},
+      {name:"Whale",   color:"#818cf8", mode:"distance", ring:[[-2,0],[2,0],[0,-2],[0,2],[-1,-1],[1,1],[1,-1],[-1,1]], survive:[1,2,3,4], birth:[2,3], eats:1, needsPrey:true, preyMin:1, lifespan:80, bornOnPrey:true, rainRate:1, rainClus:1, rainProb:45},
+    ]
+  },
+  "forest-fire": {
+    hint:"A renewing landscape. Trees grow steadily and live long; fire spreads through them on a cross neighbourhood, burns out fast (short lifespan), and leaves room to regrow — a perpetual burn-and-recover wave.",
+    species:[
+      {name:"Tree", color:"#22c55e", mode:"moore", survive:[2,3,4,5,6], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:1, rainClus:3, rainProb:30},
+      {name:"Fire", color:"#fb7185", mode:"cross", survive:[1,2,3,4], birth:[1,2], eats:0, needsPrey:true, preyMin:1, lifespan:5, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:18},
+    ]
+  },
+  "classic-conway": {
+    hint:"The original. A single immortal species, Moore neighbourhood, survive {2,3}, birth {3}. No predation, no aging.",
+    species:[
+      {name:"Life", color:"#9fe89f", mode:"moore", survive:[2,3], birth:[3], eats:null, needsPrey:false, lifespan:0},
+    ]
+  },
+  "rock-paper-scissors": {
+    hint:"Three mutual predators in a loop — each eats the next and is eaten by the previous. Long lifespans keep the chasing spirals alive indefinitely.",
+    species:[
+      {name:"Rock",     color:"#f87171", mode:"moore", survive:[1,2,3,4,5], birth:[3], eats:2, needsPrey:false, lifespan:0},
+      {name:"Paper",    color:"#facc15", mode:"moore", survive:[1,2,3,4,5], birth:[3], eats:0, needsPrey:false, lifespan:0},
+      {name:"Scissors", color:"#38bdf8", mode:"moore", survive:[1,2,3,4,5], birth:[3], eats:1, needsPrey:false, lifespan:0},
+    ]
+  },
+  "savanna": {
+    hint:"A four-tier food chain: grass → gazelles → hyenas → lions. Each tier is born directly onto its prey and gets a thin trickle of rain so the upper levels can recover after a crash. Higher tiers are rarer and longer-lived.",
+    species:[
+      {name:"Grass",   color:"#84cc16", mode:"moore", survive:[1,2,3,4,5], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:6},
+      {name:"Gazelle", color:"#fcd34d", mode:"moore", survive:[1,2,3,4], birth:[2,3], eats:0, needsPrey:true, preyMin:1, lifespan:35, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:16},
+      {name:"Hyena",   color:"#a16207", mode:"moore", survive:[1,2,3,4], birth:[2,3], eats:1, needsPrey:true, preyMin:1, lifespan:45, bornOnPrey:true, rainRate:1, rainClus:1, rainProb:30},
+      {name:"Lion",    color:"#ea580c", mode:"moore", survive:[1,2,3,4], birth:[1,2,3], eats:2, needsPrey:true, preyMin:1, lifespan:70, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:30},
+    ]
+  },
+  "moss-snail": {
+    hint:"A gentle two-tier creep. Moss spreads on a cross neighbourhood and rains in often; snails graze it and are born directly onto moss cells, so they follow the moss instead of outrunning it.",
+    species:[
+      {name:"Moss",  color:"#16a34a", mode:"cross", survive:[1,2,3,4,5], birth:[1,2,3], eats:null, needsPrey:false, lifespan:0, rainRate:1, rainClus:2, rainProb:8},
+      {name:"Snail", color:"#c084fc", mode:"moore", survive:[1,2,3], birth:[3], eats:0, needsPrey:true, preyMin:1, lifespan:40, bornOnPrey:true},
+    ]
+  },
+  "host-parasite": {
+    hint:"A disease cycle. Hosts live by Conway-like rules and seed in steadily; the parasite is born onto hosts, burns through them fast with a short lifespan, then dies back — leaving survivors to repopulate. A recurring epidemic wave kept going by a faint parasite reservoir.",
+    species:[
+      {name:"Host",     color:"#60a5fa", mode:"moore", survive:[2,3], birth:[3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:12},
+      {name:"Parasite", color:"#ef4444", mode:"moore", survive:[1,2,3,4,5], birth:[1,2,3], eats:0, needsPrey:true, preyMin:1, lifespan:8, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:15},
+    ]
+  },
+  "garden": {
+    hint:"A mutualistic garden, no predation. Flowers spread slowly and bees drift in at random; both are immortal producers with different neighbourhoods, weaving shifting patches of colour. Calm and non-violent.",
+    species:[
+      {name:"Flower", color:"#f472b6", mode:"moore", survive:[2,3,4], birth:[3,4], eats:null, needsPrey:false, lifespan:0, rainRate:1, rainClus:3, rainProb:20},
+      {name:"Bee",    color:"#fde047", mode:"diagonal", survive:[1,2,3], birth:[2], eats:null, needsPrey:false, lifespan:25, rainRate:1, rainClus:1, rainProb:10},
+    ]
+  },
+  "tundra": {
+    hint:"A sparse, slow ecosystem on a thin margin. Lichen clings on and rains in to survive; hares graze it and are born onto it; foxes hunt hares across a wide ring and are born onto them. Everything is long-lived and low-density.",
+    species:[
+      {name:"Lichen", color:"#a7f3d0", mode:"moore", survive:[2,3,4,5,6], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:6},
+      {name:"Hare",   color:"#e5e7eb", mode:"moore", survive:[1,2,3,4], birth:[2,3], eats:0, needsPrey:true, preyMin:1, lifespan:50, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:20},
+      {name:"Fox",    color:"#f97316", mode:"distance", ring:[[-2,0],[2,0],[0,-2],[0,2],[-1,0],[1,0],[0,-1],[0,1]], survive:[1,2,3,4], birth:[1,2,3], eats:1, needsPrey:true, preyMin:1, lifespan:60, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:22},
+    ]
+  },
+};
+
+/* ---------- STATE ---------- */
+let SPECIES=[];
+let cols,rows,grid,age,cellSize=9;
+let running=false,gen=0,speed=10;
+let wrapEdges=true, rain=false;
+let clusterSize=4;
+let brush=1;
+const EMPTY=0;
+const ALL8=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+
+function speciesOffsets(s){
+  if(s.mode==='distance') return s.ring||[];
+  const o=[];
+  for(const [dx,dy] of ALL8){
+    if(s.mode==='moore') o.push([dx,dy]);
+    else if(s.mode==='horizontal'&&dy===0) o.push([dx,dy]);
+    else if(s.mode==='vertical'&&dx===0) o.push([dx,dy]);
+    else if(s.mode==='diagonal'&&dx!==0&&dy!==0) o.push([dx,dy]);
+    else if(s.mode==='cross'&&(dx===0||dy===0)) o.push([dx,dy]);
+  }
+  return o;
+}
+
+/* sample neighbours of a cell using a given species' neighbourhood.
+   returns counts per type index (1-based) */
+function sample(x,y,s){
+  const counts={};
+  for(const [dx,dy] of speciesOffsets(s)){
+    let nx=x+dx,ny=y+dy;
+    if(wrapEdges){nx=(nx+cols)%cols;ny=(ny+rows)%rows;}
+    else if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
+    const v=grid[ny*cols+nx];
+    if(v!==EMPTY) counts[v]=(counts[v]||0)+1;
+  }
+  return counts;
+}
+
+function resize(){
+  const area=document.querySelector('.canvas-area');
+  const w=area.clientWidth-36,h=area.clientHeight-36;
+  cols=Math.max(4,Math.floor(w/cellSize));
+  rows=Math.max(4,Math.floor(h/cellSize));
+  cv.width=cols*cellSize; cv.height=rows*cellSize;
+  grid=new Uint8Array(cols*rows);
+  age=new Uint16Array(cols*rows);
+  $('r-dim').textContent=cols+'×'+rows;
+  draw();
+}
+const idx=(x,y)=>y*cols+x;
+
+function stepSim(){
+  const next=new Uint8Array(cols*rows);
+  const nage=new Uint16Array(cols*rows);
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const cur=grid[idx(x,y)];
+    if(cur!==EMPTY){
+      // BORN-ON-PREY: a predator that eats this species may be born right here, replacing the prey.
+      let usurper=0, usurpPriority=-1;
+      for(let i=0;i<SPECIES.length;i++){
+        const p=SPECIES[i];
+        if(p.eats!==(cur-1) || !p.bornOnPrey) continue;     // must eat THIS species and have the rule on
+        const pc=sample(x,y,p);
+        const pSame=pc[i+1]||0;
+        if(!p.birth.has(pSame)) continue;                   // predator's own birth rule must be met
+        // prey is present (this very cell) so the needsPrey condition is satisfied by definition
+        const pr=pSame;                                     // prefer the most-supported usurper
+        if(pr>usurpPriority){usurpPriority=pr;usurper=i+1;}
+      }
+      if(usurper){ next[idx(x,y)]=usurper; nage[idx(x,y)]=0; continue; }
+
+      const s=SPECIES[cur-1];
+      const c=sample(x,y,s);
+      const same=c[cur]||0;
+      const preyN=(s.eats!=null)?(c[s.eats+1]||0):0;
+      let alive = s.survive.has(same);
+      if(alive && s.needsPrey && preyN < (s.preyMin||1)) alive=false; // starves
+      const a=age[idx(x,y)]+1;
+      if(alive && s.lifespan>0 && a>s.lifespan) alive=false;          // dies of old age
+      if(alive){ next[idx(x,y)]=cur; nage[idx(x,y)]=a; }
+    } else {
+      let chosen=0, chosenPriority=-1;
+      for(let i=0;i<SPECIES.length;i++){
+        const s=SPECIES[i];
+        const c=sample(x,y,s);
+        const same=c[i+1]||0;
+        if(!s.birth.has(same)) continue;
+        const preyN=(s.eats!=null)?(c[s.eats+1]||0):0;
+        if(s.needsPrey && preyN < (s.preyMin||1)) continue;
+        const pr = (s.eats!=null && preyN>0)? 2 : (s.eats!=null?1:0);
+        if(pr>chosenPriority){chosenPriority=pr;chosen=i+1;}
+      }
+      if(chosen){ next[idx(x,y)]=chosen; nage[idx(x,y)]=0; }
+    }
+  }
+  // predation overlay: a prey cell surrounded by enough predators converts (newborn predator, age 0)
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const v=next[idx(x,y)];
+    if(v===EMPTY) continue;
+    for(let i=0;i<SPECIES.length;i++){
+      const s=SPECIES[i];
+      if(s.eats===(v-1)){
+        const c=sample(x,y,s);
+        if((c[i+1]||0)>=2){ next[idx(x,y)]=i+1; nage[idx(x,y)]=0; break; }
+      }
+    }
+  }
+  grid=next; age=nage;
+  if(rain) SPECIES.forEach((s,i)=>{
+    const denom=s.rainProb||0;                 // 0 = never; N = 1-in-N chance per generation
+    if(denom<=0) return;
+    if(Math.random()*denom >= 1) return;        // probability gate: fires with chance 1/denom
+    const count=Math.max(1,s.rainRate||1);      // clusters dropped when it fires
+    for(let n=0;n<count;n++) dropCluster(s.rainClus||0, i+1);
+  });
+  gen++;
+}
+
+function draw(){
+  ctx.fillStyle='#060906';ctx.fillRect(0,0,cv.width,cv.height);
+  let pop=0;
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const v=grid[idx(x,y)];
+    if(v!==EMPTY){pop++;ctx.fillStyle=SPECIES[v-1].color;ctx.fillRect(x*cellSize,y*cellSize,cellSize-1,cellSize-1);}
+  }
+  if(cellSize>=8){
+    ctx.strokeStyle='rgba(26,36,26,.5)';ctx.lineWidth=1;ctx.beginPath();
+    for(let x=0;x<=cols;x++){ctx.moveTo(x*cellSize+.5,0);ctx.lineTo(x*cellSize+.5,cv.height);}
+    for(let y=0;y<=rows;y++){ctx.moveTo(0,y*cellSize+.5);ctx.lineTo(cv.width,y*cellSize+.5);}
+    ctx.stroke();
+  }
+  $('r-pop').textContent=pop;$('r-gen').textContent=gen;
+}
+
+/* ---------- loop ---------- */
+let lastStep=0,lastFps=performance.now(),frames=0;
+function loop(t){
+  requestAnimationFrame(loop);
+  frames++;
+  if(t-lastFps>500){$('r-fps').textContent=Math.round(frames*1000/(t-lastFps));frames=0;lastFps=t;}
+  if(running&&t-lastStep>1000/speed){stepSim();draw();lastStep=t;}
+}
+requestAnimationFrame(loop);
+
+/* ---------- painting ---------- */
+let painting=false,eraseMode=false;
+function paintAt(e){
+  const r=cv.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left)/cellSize),y=Math.floor((e.clientY-r.top)/cellSize);
+  if(x<0||y<0||x>=cols||y>=rows)return;
+  const k=idx(x,y);grid[k]=eraseMode?EMPTY:brush;age[k]=0;draw();
+}
+cv.addEventListener('mousedown',e=>{painting=true;eraseMode=(e.button===2)||brush===0;paintAt(e);});
+cv.addEventListener('mousemove',e=>{if(painting)paintAt(e);});
+window.addEventListener('mouseup',()=>painting=false);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- load a preset into SPECIES ---------- */
+function loadPreset(key){
+  const p=PRESETS[key];
+  SPECIES=p.species.map(s=>({
+    name:s.name,color:s.color,mode:s.mode,ring:s.ring||[],
+    survive:new Set(s.survive),birth:new Set(s.birth),
+    eats:s.eats,needsPrey:!!s.needsPrey,preyMin:s.preyMin||1,
+    bornOnPrey:s.bornOnPrey!==undefined?!!s.bornOnPrey:(s.eats!=null),
+    rainRate:s.rainRate||0, rainClus:s.rainClus!==undefined?s.rainClus:2,
+    rainProb:s.rainProb!==undefined?s.rainProb:(s.rainRate?1:0),
+    lifespan:s.lifespan||0
+  }));
+  $('preset-hint').textContent=p.hint;
+  brush=1;
+  buildSpecies();buildLegend();
+}
+
+/* ---------- EXPORT / IMPORT CONFIG ---------- */
+// Build a plain-JSON snapshot of the editable configuration (species rules + global settings).
+function serializeConfig(){
+  return {
+    format:"vivarium-config", version:1,
+    settings:{
+      wrap:wrapEdges, speed, cellSize,
+      density:+$('density').value, clusterSize, rain
+    },
+    species:SPECIES.map(s=>({
+      name:s.name, color:s.color, mode:s.mode, ring:s.ring,
+      survive:[...s.survive].sort((a,b)=>a-b),
+      birth:[...s.birth].sort((a,b)=>a-b),
+      eats:s.eats, needsPrey:s.needsPrey, preyMin:s.preyMin,
+      bornOnPrey:s.bornOnPrey, lifespan:s.lifespan,
+      rainRate:s.rainRate, rainClus:s.rainClus, rainProb:s.rainProb
+    }))
+  };
+}
+
+// Validate + load a parsed config object. Returns null on success, or an error string.
+function applyConfig(cfg){
+  if(!cfg || !Array.isArray(cfg.species) || cfg.species.length===0)
+    return "No species array found in JSON.";
+  const n=cfg.species.length;
+  const sp=[];
+  for(let i=0;i<n;i++){
+    const s=cfg.species[i];
+    if(typeof s!=='object') return `Species ${i} is not an object.`;
+    let eats = (s.eats===null||s.eats===undefined)?null:(s.eats|0);
+    if(eats!==null && (eats<0||eats>=n||eats===i)) eats=null; // drop invalid diet refs
+    sp.push({
+      name: (s.name||('Species '+(i+1))).toString().slice(0,24),
+      color: /^#[0-9a-fA-F]{3,8}$/.test(s.color||'') ? s.color : '#9fe89f',
+      mode: ['moore','horizontal','vertical','diagonal','cross','distance'].includes(s.mode)?s.mode:'moore',
+      ring: Array.isArray(s.ring)?s.ring.filter(r=>Array.isArray(r)&&r.length===2).map(r=>[r[0]|0,r[1]|0]):[],
+      survive: new Set((Array.isArray(s.survive)?s.survive:[2,3]).map(Number).filter(v=>v>=0&&v<=8)),
+      birth: new Set((Array.isArray(s.birth)?s.birth:[3]).map(Number).filter(v=>v>=0&&v<=8)),
+      eats, needsPrey:!!s.needsPrey, preyMin: Math.min(6,Math.max(1,s.preyMin|0||1)),
+      bornOnPrey: s.bornOnPrey!==undefined?!!s.bornOnPrey:(eats!=null),
+      lifespan: Math.min(120,Math.max(0,s.lifespan|0)),
+      rainRate: Math.min(20,Math.max(0,s.rainRate|0)),
+      rainClus: s.rainClus!==undefined?Math.min(8,Math.max(0,s.rainClus|0)):2,
+      rainProb: s.rainProb!==undefined?Math.min(1000,Math.max(0,s.rainProb|0)):((s.rainRate|0)?1:0)
+    });
+  }
+  SPECIES=sp;
+  // global settings (optional)
+  const g=cfg.settings||{};
+  if(g.wrap!==undefined){wrapEdges=!!g.wrap;$('wrap').checked=wrapEdges;}
+  if(g.rain!==undefined){rain=!!g.rain;$('rain').checked=rain;}
+  if(g.speed!==undefined){speed=Math.min(60,Math.max(1,g.speed|0));$('speed').value=speed;$('v-speed').textContent=speed+' gen/s';}
+  if(g.cellSize!==undefined){cellSize=Math.min(24,Math.max(3,g.cellSize|0));$('cellsize').value=cellSize;$('v-cell').textContent=cellSize+' px';}
+  if(g.density!==undefined){const d=Math.min(90,Math.max(1,g.density|0));$('density').value=d;$('v-density').textContent=d+'%';}
+  if(g.clusterSize!==undefined){clusterSize=Math.min(12,Math.max(1,g.clusterSize|0));$('cluster').value=clusterSize;$('v-cluster').textContent=clusterSize;}
+  $('preset-hint').textContent='Loaded imported configuration ('+SPECIES.length+' species).';
+  brush=1;
+  resize();           // cellSize may have changed
+  buildSpecies();buildLegend();
+  return null;
+}
+
+function exportConfig(){
+  $('export-text').value = JSON.stringify(serializeConfig(),null,2);
+  $('export-box').style.display='block';
+  $('import-box').style.display='none';
+  $('export-msg').textContent='';
+  $('export-text').focus(); $('export-text').select();
+}
+
+function downloadConfig(){
+  const blob=new Blob([JSON.stringify(serializeConfig(),null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='vivarium-config.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function tryImportText(txt){
+  let cfg; try{cfg=JSON.parse(txt);}catch(e){return "Invalid JSON: "+e.message;}
+  return applyConfig(cfg);
+}
+
+// drop one ragged cluster at a random location.
+// sp = species value (1-based); if omitted, a random species is chosen.
+// radius r=0 falls back to a single cell. Used by both seeding and cell rain.
+function dropCluster(r, sp){
+  if(sp===undefined) sp=1+Math.floor(Math.random()*SPECIES.length);
+  const cx=Math.floor(Math.random()*cols), cy=Math.floor(Math.random()*rows);
+  if(r<=0){const k=idx(cx,cy);grid[k]=sp;age[k]=0;return;}
+  for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+    if(dx*dx+dy*dy>r*r) continue;
+    if(Math.random()<0.35) continue;            // ragged edges, not solid disks
+    let nx=cx+dx, ny=cy+dy;
+    if(wrapEdges){nx=(nx+cols)%cols;ny=(ny+rows)%rows;}
+    else if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
+    const k=ny*cols+nx;grid[k]=sp;age[k]=0;
+  }
+}
+
+// seed in clusters: scatter "blobs" of a single species rather than salt-and-pepper noise.
+// density controls how much of the field gets covered; clusterSize sets blob radius.
+function seedRandom(){
+  grid=new Uint8Array(cols*rows); age=new Uint16Array(cols*rows);
+  const d=+$('density').value/100;
+  const r=clusterSize;
+  const cellsPerBlob=Math.max(1,Math.PI*r*r*0.6);
+  const blobs=Math.max(1,Math.round(d*cols*rows/cellsPerBlob));
+  for(let b=0;b<blobs;b++) dropCluster(r);
+  gen=0;draw();
+}
+
+/* ---------- UI: preset dropdown ---------- */
+function buildPresetMenu(){
+  const sel=$('preset');sel.innerHTML='';
+  const labels={"grass-cows-wolves":"🌱 Grass · Cows · Wolves","coral-fish-shark":"🪸 Coral · Fish · Shark","fungus-termite":"🍄 Fungus · Termites","plankton-krill-whale":"🌊 Plankton · Krill · Whale","forest-fire":"🔥 Forest &amp; Fire","savanna":"🦁 Savanna (4 tiers)","moss-snail":"🐌 Moss · Snails","host-parasite":"🦠 Host · Parasite","garden":"🌸 Garden (peaceful)","tundra":"❄ Tundra (sparse)","rock-paper-scissors":"♻ Rock · Paper · Scissors","classic-conway":"▣ Classic Conway"};
+  for(const k in PRESETS){const o=document.createElement('option');o.value=k;o.textContent=labels[k]||k;sel.appendChild(o);}
+}
+$('preset').onchange=function(){$('preset-hint').textContent=PRESETS[this.value].hint;};
+$('apply-preset').onclick=()=>{loadPreset($('preset').value);seedRandom();};
+
+$('export-cfg').onclick=exportConfig;
+$('export-download').onclick=downloadConfig;
+$('export-close').onclick=()=>{$('export-box').style.display='none';};
+$('export-copy').onclick=async()=>{
+  const txt=$('export-text').value;
+  try{
+    await navigator.clipboard.writeText(txt);
+    $('export-msg').textContent='Copied to clipboard.';
+  }catch(e){
+    // fallback for environments without clipboard API
+    const t=$('export-text'); t.focus(); t.select();
+    let ok=false; try{ok=document.execCommand('copy');}catch(_){}
+    $('export-msg').textContent=ok?'Copied to clipboard.':'Press Ctrl/Cmd+C to copy the selected text.';
+  }
+};
+$('import-cfg').onclick=()=>{
+  $('import-box').style.display='block';
+  $('export-box').style.display='none';
+  $('import-err').textContent='';
+  $('import-text').focus();
+};
+$('import-choose').onclick=()=>{ $('import-file').click(); };
+$('import-file').onchange=function(){
+  const f=this.files&&this.files[0]; if(!f) return;
+  const rdr=new FileReader();
+  rdr.onload=()=>{
+    $('import-text').value=rdr.result;
+    const err=tryImportText(rdr.result);
+    if(err){ $('import-box').style.display='block'; $('import-err').textContent=err; }
+    else { $('import-box').style.display='none'; $('import-err').textContent=''; }
+  };
+  rdr.readAsText(f);
+  this.value=''; // allow re-importing same file
+};
+$('import-apply').onclick=()=>{
+  const err=tryImportText($('import-text').value);
+  $('import-err').textContent=err||'';
+  if(!err) $('import-box').style.display='none';
+};
+$('import-cancel').onclick=()=>{ $('import-box').style.display='none'; $('import-err').textContent=''; };
+
+/* ---------- UI: legend ---------- */
+function buildLegend(){
+  const l=$('legend');l.innerHTML='';
+  SPECIES.forEach(s=>{const e=document.createElement('span');e.className='lg';e.innerHTML=`<i style="background:${s.color}"></i>${s.name}`;l.appendChild(e);});
+}
+
+/* ---------- UI: per-species editors ---------- */
+const MODES=[["moore","Moore (all 8)"],["horizontal","Horizontal ← →"],["vertical","Vertical ↑ ↓"],["diagonal","Diagonal ✕"],["cross","Cross ＋"],["distance","Distance ring"]];
+function numLine(set,onToggle){
+  const wrap=document.createElement('div');wrap.className='num-line';
+  for(let n=0;n<=8;n++){const d=document.createElement('div');d.className='dcell'+(set.has(n)?' on':'');d.textContent=n;
+    d.onclick=()=>{set.has(n)?set.delete(n):set.add(n);d.classList.toggle('on');onToggle&&onToggle();};wrap.appendChild(d);}
+  return wrap;
+}
+function distGrid(s){
+  const g=document.createElement('div');g.className='dist-grid';
+  const has=(dx,dy)=>s.ring.some(r=>r[0]===dx&&r[1]===dy);
+  for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+    const d=document.createElement('div');d.className='dcell';
+    if(dx===0&&dy===0){d.className+=' center';d.textContent='◎';}
+    else{
+      if(has(dx,dy))d.className+=' on';
+      d.textContent=Math.max(Math.abs(dx),Math.abs(dy));
+      d.onclick=()=>{const i=s.ring.findIndex(r=>r[0]===dx&&r[1]===dy);if(i>=0)s.ring.splice(i,1);else s.ring.push([dx,dy]);d.classList.toggle('on');};
+    }
+    g.appendChild(d);
+  }
+  return g;
+}
+function buildSpecies(){
+  const list=$('species-list');list.innerHTML='';
+  SPECIES.forEach((s,i)=>{
+    const card=document.createElement('div');card.className='sp-card';
+    const head=document.createElement('div');head.className='sp-head';
+    const isPred=s.eats!=null;
+    const lifeTag = s.lifespan>0 ? `<span class="tag">life ${s.lifespan}</span>` : `<span class="tag">immortal</span>`;
+    head.innerHTML=`<span class="swatch" style="background:${s.color}"></span>
+      <span class="nm">${s.name}${isPred?`<span class="tag pred">PRED</span>`:`<span class="tag">producer</span>`}${lifeTag}</span>
+      <span class="chev">▶</span>`;
+    const body=document.createElement('div');body.className='sp-body';
+    head.onclick=()=>{head.classList.toggle('open');body.classList.toggle('open');};
+
+    const modeLabel=document.createElement('label');modeLabel.textContent='Neighbourhood';
+    const modeSel=document.createElement('select');
+    MODES.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;if(s.mode===v)o.selected=true;modeSel.appendChild(o);});
+    const ringHolder=document.createElement('div');
+    function renderRing(){ringHolder.innerHTML='';if(s.mode==='distance')ringHolder.appendChild(distGrid(s));}
+    modeSel.onchange=()=>{s.mode=modeSel.value;renderRing();};
+    body.appendChild(modeLabel);body.appendChild(modeSel);body.appendChild(ringHolder);renderRing();
+
+    const sl=document.createElement('label');sl.textContent='Survive if own-neighbours ∈';body.appendChild(sl);
+    body.appendChild(numLine(s.survive));
+    const bl=document.createElement('label');bl.textContent='Born if own-neighbours ∈';body.appendChild(bl);
+    body.appendChild(numLine(s.birth));
+
+    // lifespan
+    const ll=document.createElement('label');
+    ll.innerHTML=`Lifespan <span class="val">${s.lifespan>0?s.lifespan+' gens':'∞ immortal'}</span>`;body.appendChild(ll);
+    const lr=document.createElement('input');lr.type='range';lr.min='0';lr.max='120';lr.value=s.lifespan;
+    lr.oninput=()=>{s.lifespan=+lr.value;ll.querySelector('.val').textContent=s.lifespan>0?s.lifespan+' gens':'∞ immortal';
+      head.querySelectorAll('.tag').forEach(t=>{if(t.textContent.startsWith('life')||t.textContent==='immortal')t.textContent=s.lifespan>0?'life '+s.lifespan:'immortal';});};
+    body.appendChild(lr);
+    const lh=document.createElement('div');lh.className='hint';lh.textContent='0 = immortal (only dies by the rules). Higher = cells live more generations before dying of old age.';body.appendChild(lh);
+
+    // diet
+    const dl=document.createElement('label');dl.textContent='Eats (prey species)';body.appendChild(dl);
+    const diet=document.createElement('select');
+    const none=document.createElement('option');none.value='-1';none.textContent='— nothing (producer) —';diet.appendChild(none);
+    SPECIES.forEach((o,j)=>{if(j===i)return;const op=document.createElement('option');op.value=j;op.textContent=o.name;if(s.eats===j)op.selected=true;diet.appendChild(op);});
+    diet.onchange=()=>{const v=+diet.value;s.eats=v<0?null:v;buildSpecies();};
+    body.appendChild(diet);
+
+    if(isPred){
+      const np=document.createElement('div');np.className='checkrow';
+      np.innerHTML=`<input type="checkbox" ${s.needsPrey?'checked':''} id="np${i}"><label for="np${i}">Must eat to live — starves without prey nearby</label>`;
+      np.querySelector('input').onchange=e=>{s.needsPrey=e.target.checked;buildSpecies();};
+      body.appendChild(np);
+      if(s.needsPrey){
+        const pm=document.createElement('label');pm.innerHTML=`Min prey to survive <span class="val">${s.preyMin}</span>`;body.appendChild(pm);
+        const r=document.createElement('input');r.type='range';r.min='1';r.max='6';r.value=s.preyMin;
+        r.oninput=()=>{s.preyMin=+r.value;pm.querySelector('.val').textContent=r.value;};body.appendChild(r);
+      }
+      const bp=document.createElement('div');bp.className='checkrow';
+      bp.innerHTML=`<input type="checkbox" ${s.bornOnPrey?'checked':''} id="bp${i}"><label for="bp${i}">Born onto prey — newborns replace a ${SPECIES[s.eats]?SPECIES[s.eats].name:'prey'} cell directly</label>`;
+      bp.querySelector('input').onchange=e=>{s.bornOnPrey=e.target.checked;};
+      body.appendChild(bp);
+    }
+
+    // per-species cell rain
+    // chance is stored as a denominator N (1-in-N per generation). 0 = never.
+    const RAIN_DENOMS=[0,1,2,3,5,10,20,30,50,100,200,500,1000];
+    function denomLabel(n){return n===0?'never':(n===1?'every gen':'1 in '+n);}
+    let pos=RAIN_DENOMS.indexOf(s.rainProb);
+    if(pos<0){ // snap arbitrary value to nearest listed denom
+      pos=RAIN_DENOMS.reduce((best,d,j)=>Math.abs(d-s.rainProb)<Math.abs(RAIN_DENOMS[best]-s.rainProb)?j:best,0);
+      s.rainProb=RAIN_DENOMS[pos];
+    }
+    const pl=document.createElement('label');
+    pl.innerHTML=`Rain chance <span class="val">${denomLabel(s.rainProb)}</span>`;body.appendChild(pl);
+    const pr2=document.createElement('input');pr2.type='range';pr2.min='0';pr2.max=String(RAIN_DENOMS.length-1);pr2.step='1';pr2.value=String(pos);
+    pr2.oninput=()=>{s.rainProb=RAIN_DENOMS[+pr2.value];pl.querySelector('.val').textContent=denomLabel(s.rainProb);};
+    body.appendChild(pr2);
+
+    const rl=document.createElement('label');
+    rl.innerHTML=`Rain amount <span class="val">${Math.max(1,s.rainRate||1)} cluster(s)</span>`;body.appendChild(rl);
+    const rr=document.createElement('input');rr.type='range';rr.min='1';rr.max='20';rr.value=Math.max(1,s.rainRate||1);
+    rr.oninput=()=>{s.rainRate=+rr.value;rl.querySelector('.val').textContent=s.rainRate+' cluster(s)';};
+    body.appendChild(rr);
+
+    const rcl=document.createElement('label');
+    rcl.innerHTML=`Rain cluster size <span class="val">${s.rainClus}</span>`;body.appendChild(rcl);
+    const rc=document.createElement('input');rc.type='range';rc.min='0';rc.max='8';rc.value=s.rainClus;
+    rc.oninput=()=>{s.rainClus=+rc.value;rcl.querySelector('.val').textContent=s.rainClus;};
+    body.appendChild(rc);
+    const rh=document.createElement('div');rh.className='hint';rh.textContent='Needs the master rain switch on. Chance = probability this species rains in each generation (e.g. 1 in 30). Amount = clusters dropped when it fires. Cluster size 0 = single cells.';body.appendChild(rh);
+
+    card.appendChild(head);card.appendChild(body);list.appendChild(card);
+  });
+  buildPalette();buildLegend();
+}
+
+/* ---------- palette ---------- */
+function buildPalette(){
+  const p=$('palette');p.innerHTML='';
+  SPECIES.forEach((s,i)=>{const d=document.createElement('div');d.className='pal'+(brush===i+1?' sel':'');d.style.background=s.color;d.title=s.name;
+    d.onclick=()=>{brush=i+1;refreshPal();};p.appendChild(d);});
+  const er=document.createElement('div');er.className='pal erase'+(brush===0?' sel':'');er.textContent='⌫';
+  er.onclick=()=>{brush=0;refreshPal();};p.appendChild(er);
+}
+function refreshPal(){document.querySelectorAll('.pal').forEach((d,i)=>d.classList.toggle('sel',i<SPECIES.length?brush===i+1:brush===0));}
+
+/* ---------- control wiring ---------- */
+$('run').onclick=function(){running=!running;this.classList.toggle('paused',!running);this.textContent=running?'❚❚ PAUSE':'▶ RUN';$('r-status').textContent=running?'RUNNING':'PAUSED';};
+$('step').onclick=()=>{stepSim();draw();};
+$('clear').onclick=()=>{grid=new Uint8Array(cols*rows);age=new Uint16Array(cols*rows);gen=0;draw();};
+$('randomize').onclick=seedRandom;
+$('speed').oninput=function(){speed=+this.value;$('v-speed').textContent=speed+' gen/s';};
+$('density').oninput=function(){$('v-density').textContent=this.value+'%';};
+$('cluster').oninput=function(){clusterSize=+this.value;$('v-cluster').textContent=this.value;};
+$('rain').onchange=function(){rain=this.checked;};
+$('cellsize').oninput=function(){cellSize=+this.value;$('v-cell').textContent=cellSize+' px';resize();};
+$('wrap').onchange=function(){wrapEdges=this.checked;};
+
+window.addEventListener('resize',resize);
+
+/* ---------- boot ---------- */
+buildPresetMenu();
+loadPreset('grass-cows-wolves');
+resize();
+seedRandom();
+$('run').click();
+</script>
+</body>
+</html>
