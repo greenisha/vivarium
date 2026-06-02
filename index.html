@@ -351,7 +351,10 @@ function stepSim(){
         const pr=pSame;                                     // prefer the most-supported usurper
         if(pr>usurpPriority){usurpPriority=pr;usurper=i+1;}
       }
-      if(usurper){ next[idx(x,y)]=usurper; nage[idx(x,y)]=0; continue; }
+      if(usurper){
+        const ubr=SPECIES[usurper-1].birthRate??1;
+        if(ubr>=1||Math.random()<ubr){next[idx(x,y)]=usurper;nage[idx(x,y)]=0;continue;}
+      }
 
       const s=SPECIES[cur-1];
       const c=sample(x,y,s);
