@@ -225,8 +225,8 @@ const PRESETS = {
   "forest-fire": {
     hint:"A renewing landscape. Trees grow steadily and live long; fire spreads through them on a cross neighbourhood, burns out fast (short lifespan), and leaves room to regrow — a perpetual burn-and-recover wave.",
     species:[
-      {name:"Tree", color:"#22c55e", mode:"moore", survive:[2,3,4,5,6], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:1, rainClus:3, rainProb:30},
-      {name:"Fire", color:"#fb7185", mode:"cross", survive:[1,2,3,4], birth:[1,2], eats:0, needsPrey:true, preyMin:1, lifespan:5, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:18},
+      {name:"Tree", color:"#22c55e", mode:"moore", survive:[2,3,4,5,6], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:1, rainClus:3, rainProb:30, birthRate:0.5},
+      {name:"Fire", color:"#fb7185", mode:"cross", survive:[1,2,3,4], birth:[1,2], eats:0, needsPrey:true, preyMin:1, lifespan:5, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:18, birthRate:2},
     ]
   },
   "classic-conway": {
@@ -262,8 +262,8 @@ const PRESETS = {
   "host-parasite": {
     hint:"A disease cycle. Hosts live by Conway-like rules and seed in steadily; the parasite is born onto hosts, burns through them fast with a short lifespan, then dies back — leaving survivors to repopulate. A recurring epidemic wave kept going by a faint parasite reservoir.",
     species:[
-      {name:"Host",     color:"#60a5fa", mode:"moore", survive:[2,3], birth:[3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:12},
-      {name:"Parasite", color:"#ef4444", mode:"moore", survive:[1,2,3,4,5], birth:[1,2,3], eats:0, needsPrey:true, preyMin:1, lifespan:8, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:15},
+      {name:"Host",     color:"#60a5fa", mode:"moore", survive:[1,2,3], birth:[2,3], eats:null, needsPrey:false, lifespan:0, rainRate:2, rainClus:3, rainProb:12},
+      {name:"Parasite", color:"#ef4444", mode:"moore", survive:[2,3], birth:[3], eats:0, needsPrey:true, preyMin:1, lifespan:8, bornOnPrey:true, rainRate:1, rainClus:2, rainProb:15},
     ]
   },
   "garden": {
@@ -374,7 +374,27 @@ function stepSim(){
         const pr = (s.eats!=null && preyN>0)? 2 : (s.eats!=null?1:0);
         if(pr>chosenPriority){chosenPriority=pr;chosen=i+1;}
       }
-      if(chosen){ next[idx(x,y)]=chosen; nage[idx(x,y)]=0; }
+      if(chosen){
+        const br=SPECIES[chosen-1].birthRate??1;
+        if(br>=1||Math.random()<br){next[idx(x,y)]=chosen;nage[idx(x,y)]=0;}
+      }
+    }
+  }
+  // birthRate > 1: spread newly-born cells into adjacent empty cells
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    if(grid[idx(x,y)]!==EMPTY||next[idx(x,y)]===EMPTY) continue;
+    const br=(SPECIES[next[idx(x,y)]-1].birthRate??1);
+    if(br<=1) continue;
+    const extra=Math.floor(br-1)+(Math.random()<((br-1)%1)?1:0);
+    if(extra===0) continue;
+    const dirs=[[0,-1],[1,0],[0,1],[-1,0]].sort(()=>Math.random()-0.5);
+    let filled=0;
+    for(const [dx,dy] of dirs){
+      if(filled>=extra) break;
+      const nx=wrapEdges?(x+dx+cols)%cols:x+dx;
+      const ny=wrapEdges?(y+dy+rows)%rows:y+dy;
+      if(nx<0||nx>=cols||ny<0||ny>=rows) continue;
+      if(next[idx(nx,ny)]===EMPTY){next[idx(nx,ny)]=next[idx(x,y)];nage[idx(nx,ny)]=0;filled++;}
     }
   }
   // predation overlay: a prey cell surrounded by enough predators converts (newborn predator, age 0)
@@ -449,7 +469,8 @@ function loadPreset(key){
     bornOnPrey:s.bornOnPrey!==undefined?!!s.bornOnPrey:(s.eats!=null),
     rainRate:s.rainRate||0, rainClus:s.rainClus!==undefined?s.rainClus:2,
     rainProb:s.rainProb!==undefined?s.rainProb:(s.rainRate?1:0),
-    lifespan:s.lifespan||0
+    lifespan:s.lifespan||0,
+    birthRate:s.birthRate!==undefined?s.birthRate:1
   }));
   $('preset-hint').textContent=p.hint;
   brush=1;
@@ -471,7 +492,8 @@ function serializeConfig(){
       birth:[...s.birth].sort((a,b)=>a-b),
       eats:s.eats, needsPrey:s.needsPrey, preyMin:s.preyMin,
       bornOnPrey:s.bornOnPrey, lifespan:s.lifespan,
-      rainRate:s.rainRate, rainClus:s.rainClus, rainProb:s.rainProb
+      rainRate:s.rainRate, rainClus:s.rainClus, rainProb:s.rainProb,
+      birthRate:s.birthRate
     }))
   };
 }
@@ -499,7 +521,8 @@ function applyConfig(cfg){
       lifespan: Math.min(120,Math.max(0,s.lifespan|0)),
       rainRate: Math.min(20,Math.max(0,s.rainRate|0)),
       rainClus: s.rainClus!==undefined?Math.min(8,Math.max(0,s.rainClus|0)):2,
-      rainProb: s.rainProb!==undefined?Math.min(1000,Math.max(0,s.rainProb|0)):((s.rainRate|0)?1:0)
+      rainProb: s.rainProb!==undefined?Math.min(1000,Math.max(0,s.rainProb|0)):((s.rainRate|0)?1:0),
+      birthRate: s.birthRate!==undefined?Math.min(4,Math.max(0,+s.birthRate||1)):1
     });
   }
   SPECIES=sp;
@@ -673,6 +696,15 @@ function buildSpecies(){
     body.appendChild(numLine(s.survive));
     const bl=document.createElement('label');bl.textContent='Born if own-neighbours ∈';body.appendChild(bl);
     body.appendChild(numLine(s.birth));
+
+    // birth rate
+    function brLabel(v){return v<1?`${Math.round(v*100)}% chance`:v===1?'normal (×1)':`×${v.toFixed(1)} (spreads +${Math.floor(v-1)} cell${Math.floor(v-1)!==1?'s':''})`;}
+    const brl=document.createElement('label');
+    brl.innerHTML=`Birth rate <span class="val">${brLabel(s.birthRate??1)}</span>`;body.appendChild(brl);
+    const brr=document.createElement('input');brr.type='range';brr.min='0';brr.max='4';brr.step='0.1';brr.value=String(s.birthRate??1);
+    brr.oninput=()=>{s.birthRate=+brr.value;brl.querySelector('.val').textContent=brLabel(s.birthRate);};
+    body.appendChild(brr);
+    const brh=document.createElement('div');brh.className='hint';brh.textContent='< 1 = birth probability when condition is met. > 1 = also births into adjacent empty cells (integer part = guaranteed extras, fraction = probability of one more).';body.appendChild(brh);
 
     // lifespan
     const ll=document.createElement('label');
