@@ -383,21 +383,25 @@ function stepSim(){
       }
     }
   }
-  // birthRate > 1: spread newly-born cells into adjacent empty cells
-  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
-    if(grid[idx(x,y)]!==EMPTY||next[idx(x,y)]===EMPTY) continue;
-    const br=(SPECIES[next[idx(x,y)]-1].birthRate??1);
-    if(br<=1) continue;
+  // birthRate > 1: spread naturally-born cells into adjacent empty cells.
+  // Snapshot sources first so spread cells don't cascade within the same step.
+  const spreadSrc=[];
+  for(let j=0;j<cols*rows;j++){
+    if(grid[j]===EMPTY&&next[j]!==EMPTY&&(SPECIES[next[j]-1].birthRate??1)>1) spreadSrc.push(j);
+  }
+  for(const pos of spreadSrc){
+    const br=SPECIES[next[pos]-1].birthRate??1;
     const extra=Math.floor(br-1)+(Math.random()<((br-1)%1)?1:0);
     if(extra===0) continue;
+    const sx=pos%cols, sy=(pos/cols)|0;
     const dirs=[[0,-1],[1,0],[0,1],[-1,0]].sort(()=>Math.random()-0.5);
     let filled=0;
     for(const [dx,dy] of dirs){
       if(filled>=extra) break;
-      const nx=wrapEdges?(x+dx+cols)%cols:x+dx;
-      const ny=wrapEdges?(y+dy+rows)%rows:y+dy;
+      const nx=wrapEdges?(sx+dx+cols)%cols:sx+dx;
+      const ny=wrapEdges?(sy+dy+rows)%rows:sy+dy;
       if(nx<0||nx>=cols||ny<0||ny>=rows) continue;
-      if(next[idx(nx,ny)]===EMPTY){next[idx(nx,ny)]=next[idx(x,y)];nage[idx(nx,ny)]=0;filled++;}
+      if(next[idx(nx,ny)]===EMPTY){next[idx(nx,ny)]=next[pos];nage[idx(nx,ny)]=0;filled++;}
     }
   }
   // predation overlay: a prey cell surrounded by enough predators converts (newborn predator, age 0)
